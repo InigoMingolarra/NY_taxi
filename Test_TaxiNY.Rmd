@@ -1,0 +1,860 @@
+---
+title: '**Test_Taxi_NY:** *May 2021*'
+resource_files:
+- data10_with_type.csv
+- Earthwork_Condition_Changes_All.csv
+runtime: shiny
+output:
+  html_document:
+    toc: false
+    code_folding: hide
+    includes:
+      after_body: footer.html
+---
+
+### {.tabset}  
+
+#### Data Ingestion 
+
+<br>
+
+##### Loading R packages
+These are the R packages used in this analysis. 
+```{r echo=T, warning=F, message=F}
+#devtools::install_github("haozhu233/kableExtra")
+library(kableExtra);library(htmltools);library(knitr);library(tibble)
+library(tidyverse);library(shiny)
+library(plyr);library(reshape2);library(plotly)
+library(lubridate);library(rgdal);#library(sf)
+library(leaflet);library(broom);library(ggplot2);library(dplyr)
+library(pander);library(dygraphs);#library(transprob);## package for Markov Chains
+library(psych);library(DT); library(data.table);library(magrittr)
+```
+##### Reading the data
+Yellow cabs datasets from 2017 March, June and November. 
+```{r echo=T, warning=F, message=F}
+# setwd("~/Documents/App_Carto_Test")
+ 
+# ## fread faster than read_csv 
+# data1 <- read_csv("dataset/yellow_tripdata_2017-03.csv")
+# data2 <- read_csv("dataset/yellow_tripdata_2017-06.csv")
+# data3 <- read_csv("dataset/yellow_tripdata_2017-11.csv")
+# 
+# dataTaxiSample <- rbind(data1, data2,data3)
+# rm(data1, data2, data3)
+```
++ 29236424 records.
++ 17 variables.
+
+##### Reformatting attributes
+Several variables must be reformatted to the appropriate data type.
+```{r echo=T, warning=F, message=F}
+#dataTaxiSample$VendorID <- mclapply(dataTaxiSample$VendorID, function(x) as.factor(x), mc.cores =  detectCores() )
+
+# dataTaxiSample$VendorID <- as.factor(dataTaxiSample$VendorID)
+# dataTaxiSample$tpep_pickup_datetime <- as_datetime(dataTaxiSample$tpep_pickup_datetime)
+# dataTaxiSample$tpep_dropoff_datetime <- as_datetime(dataTaxiSample$tpep_dropoff_datetime)
+# dataTaxiSample$passenger_count <- as.integer(dataTaxiSample$passenger_count) 
+# ## también puede ser factor 
+# dataTaxiSample$RatecodeID <- as.factor(dataTaxiSample$RatecodeID)
+# dataTaxiSample$store_and_fwd_flag <- as.factor(dataTaxiSample$store_and_fwd_flag)
+# ## correspoden a shapes MapZones
+# dataTaxiSample$PULocationID <- as.factor(dataTaxiSample$PULocationID)
+# dataTaxiSample$DOLocationID <- as.factor(dataTaxiSample$DOLocationID)
+# 
+# dataTaxiSample$payment_type <- as.factor(dataTaxiSample$payment_type)
+```
+##### Data cleaning
++ missing values check
+```{r echo=T, warning=F, message=F}
+##check  NA
+##library ("parallel")
+# numCores <- detectCores()
+# mclapply(dataTaxiSample, function(x) sum(is.na(x)),mc.cores = numCores )
+# sapply(dataTaxiSample, function(x) sum(is.na(x)))
+# there are no missing values 
+```
++ assessing datetime issues and concordances
+```{r echo=T, warning=F, message=F}
+#table(year(dataTaxiSample$tpep_dropoff_datetime))
+
+# dataTaxiSample <- dataTaxiSample[year(dataTaxiSample$tpep_pickup_datetime) =="2017" &
+#                       year(dataTaxiSample$tpep_dropoff_datetime) =="2017",]
+# 
+# aa <- dataTaxiSample[month(dataTaxiSample$tpep_pickup_datetime) != month(dataTaxiSample$tpep_dropoff_datetime),]
+# #
+# # dataTaxiSample <- dataTaxiSample[month(dataTaxiSample$tpep_pickup_datetime) == month(dataTaxiSample$tpep_dropoff_datetime),]
+# # ### podría ser poer los viajes a medianoche están mal registrados; se han visto varias inconsitencias (son pocos registros ademas)
+# # ## related to store_and_fwd_flag?
+# #
+# dataTaxiSample <- dataTaxiSample[month(dataTaxiSample$tpep_pickup_datetime) %in% c("3","6","11") &
+                       # month(dataTaxiSample$tpep_dropoff_datetime) %in% c("3","6","11"),]
+#29223155 records
+#
+#
+# #table(dataTaxiSample$tip)
+# #tabla propina si o no frente a payment_type
+# table(dataTaxiSample$tip,dataTaxiSample$payment_type)
+# ## descartamos payment_type != credit card. para analisis tip
+# ## en cash no hay propina salvo error (¿4);
+# ## aquellos servicios que no cobran no suelen dar propinas(?) ;
+# ## disputa con el clliente (y 73 dan propina?)
+# ## podemos descartar estos registros para el analisis de la propina; hacer analisis pagadores en metalico
+# ## explaciación
+#dataTaxiSampleCard <- dataTaxiSample[dataTaxiSample$payment_type =="1", ]
+#
+#
+#dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$extra >= 0, ]
+# ## por su porpia definicion ?? extra or surchages
+# ## "Curently this only includes....
+# dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$extra == 0|
+#                                dataTaxiSampleCard$extra == 0.5|
+#                                dataTaxiSampleCard$extra == 1, ]
+# #table(dataTaxiSampleCard$extra)
+# #
+# dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$mta_tax == 0|
+#                                dataTaxiSampleCard$mta_tax == 0.5, ]
+# ## razonable lo que se queda fuera es muy poco, (6717 registro con -0.5 ; -> explore)
+# #table(dataTaxiSampleCard$improvement_surcharge)
+# ## razonable
+#
+# ## negative tip values dropped
+# dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$tip_amount >=0, ]
+#
+#
+# #table(dataTaxiSample$tip) 
+# #tabla propina si o no frente a payment_type
+# table(dataTaxiSample$tip,dataTaxiSample$payment_type)
+# 
+
+# ## descartamos payment_type != credit card. para analisis tip 
+# ## en cash no hay propina salvo error (¿4); 
+# ## aquellos servicios que no cobran no suelen dar propinas(?) ; 
+# ## disputa con el clliente (y 73 dan propina?) 
+# ## podemos descartar estos registros para el analisis de la propina; hacer analisis pagadores en metalico
+# ## explaciación 
+# dataTaxiSampleCard <- dataTaxiSample[dataTaxiSample$payment_type =="1", ]
+# 
+# 
+# dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$extra >= 0, ]
+# ## por su porpia definicion ?? extra or surchages 
+# ## "Curently this only includes....
+# dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$extra == 0|
+#                                dataTaxiSampleCard$extra == 0.5|
+#                                dataTaxiSampleCard$extra == 1, ]
+# #table(dataTaxiSampleCard$extra)
+# #
+# dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$mta_tax == 0|
+#                                dataTaxiSampleCard$mta_tax == 0.5, ]
+# ## razonable lo que se queda fuera es muy poco, (6717 registro con -0.5 ; -> explore)
+# #table(dataTaxiSampleCard$improvement_surcharge)
+# ## razonable
+# 
+# 
+# ##hist(dataTaxiSampleCard$total_amount, breaks = 400 , xlim = c(-1,100))
+# ##if included might mislead the analysis later on
+# dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$fare_amount >0, ]
+
+##dataTaxiSampleCard  <- dataTaxiSampleCard[dataTaxiSampleCard$total_amount>0,]
+
+# ## negative tip values dropped 
+# dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$tip_amount >=0, ]
+
+## trip time frequency table 
+# dataTaxiSampleCard$trip_time_min.cut = cut(dataTaxiSampleCard$trip_time_min, breaks = c(0,30,60,120, 180,1500))
+# with(dataTaxiSampleCard, table(trip_time_min.cut, useNA='ifany'))
+# dataTaxiSampleCard$trip_time_min.cut <- NULL
+
+# trips only less than 3 hours and no data issues 
+
+# dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$trip_time_min < 180,]
+# dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$trip_time_min >0 &
+#                                dataTaxiSampleCard$trip_distance >0 &
+#                                dataTaxiSampleCard$trip_distance <40,]
+# 
+# ##distance greater than zero
+# dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$trip_distance >0,]
+# dataTaxiSampleCard <- dataTaxiSampleCard[dataTaxiSampleCard$trip_distance <40,]
+```
+##### Pre-processing and creation of new variables 
+New variables added: tip percentage, week day, trip time in minutes
+```{r echo=T, warning=F, message=F}
+
+# dataTaxiSampleCard$tip <- dataTaxiSampleCard$tip_amount >0
+# 
+# ### cambios en la fachas y demás 
+# dataTaxiSampleCard$tip_per <- dataTaxiSampleCard$tip_amount/dataTaxiSampleCard$total_amount
+# 
+# dataTaxiSampleCard$wday <- wday(dataTaxiSampleCard$tpep_pickup_datetime)
+# 
+# ##creating interval object 
+# # difftime(hms::as_hms(dataTaxiSampleCard$tpep_dropoff_datetime), 
+# #          hms::as_hms(dataTaxiSampleCard$tpep_pickup_datetime), units = 'mins')
+# 
+# dataTaxiSampleCard$trip_time_min <- as.numeric(difftime(ymd_hms(dataTaxiSampleCard$tpep_dropoff_datetime), 
+#                                          ymd_hms(dataTaxiSampleCard$tpep_pickup_datetime), units = 'mins'))
+# 
+# dataTaxiSample <- dataTaxiSample[dataTaxiSample$trip_time_min >0,]
+
+
+```
+ 
+<br>  
+  
+#### The Dataset
+
+<br>  
+
+After the initial preliminary data processing we got:  
+```{r echo=T, warning=F, message=F}
+
+```
++ 29236424 records.  
++ 22 variables.
+
+below is shown a sample of the data: 
+
+<br>
+
+```{r echo=F, warning=F, message=F}
+# setwd("~/Documents/App_Carto_Test")
+# load("~/Documents/App_Carto_Test/DataSampled.RData")
+
+dataTaxiSample <- as.data.frame(read_delim("dataset/dataTaxiSample.csv", ";", escape_double = FALSE, trim_ws = TRUE))
+
+dataTaxiSample$VendorID <- as.factor(dataTaxiSample$VendorID)
+# dataTaxiSample$tpep_pickup_datetime <- ymd_hm(dataTaxiSample$tpep_pickup_datetime)
+# dataTaxiSample$tpep_dropoff_datetime <- ymd_hm(dataTaxiSample$tpep_dropoff_datetime)
+dataTaxiSample$tip_per <- dataTaxiSample$tip_amount/dataTaxiSample$total_amount
+dataTaxiSample$trip_time_min <- as.numeric(difftime(ymd_hms(dataTaxiSample$tpep_dropoff_datetime), 
+                                         ymd_hms(dataTaxiSample$tpep_pickup_datetime), units = 'mins'))
+# 
+dataTaxiSample$passenger_count <- as.integer(dataTaxiSample$passenger_count)
+## también puede ser factor
+dataTaxiSample$RatecodeID <- as.factor(dataTaxiSample$RatecodeID)
+dataTaxiSample$store_and_fwd_flag <- as.factor(dataTaxiSample$store_and_fwd_flag)
+## correspoden a shapes MapZones
+dataTaxiSample$PULocationID <- as.factor(dataTaxiSample$PULocationID)
+dataTaxiSample$DOLocationID <- as.factor(dataTaxiSample$DOLocationID)
+
+dataTaxiSample$payment_type <- as.factor(dataTaxiSample$payment_type)
+
+```
+```{r echo=F, warning=F, message=F}
+df <- dataTaxiSample
+dfHead <- df[sample(nrow(df), 7), ]
+
+aa <- sapply(df,function(x) sum(is.na(x)))
+bb <- sapply(df, function(x) length(unique(x)))
+cc <- sapply(df, function(x) class(x))
+ee <- rbind(as.data.frame(rbind(aa,bb,cc)), dfHead)
+
+indi <- c("NA count", "Distinct values", "Data Type" ,  paste0("Sample ",c(1:7)))
+rownames(ee) <- indi
+kable(ee, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed")) %>%
+  row_spec(3, bold = T, color = "white", background = "#D7261E") %>%
+  column_spec(1, bold = T, color = "black", background = "#add8e6") %>%
+  scroll_box(width = "900px")
+```
+<br>
+
+times not correctly displayed.
+
+##### Metadata 
+<br>
+```{r echo=F, warning=F, message=F, fig.show='hold', dpi=220}
+# Soil cuttings 
+# in the UK counties
+# staying in D or degrading to D
+img(src='images/metadata.png', height=750,width=700)
+
+```
+
+#### Preliminary Analysis
+
+<br>
+
+##### Basic statistical indicators ; using DataExplorer package  
+Only shown correlation matrix 
+```{r echo=T, warning=F, message=F}
+library(DataExplorer)
+
+# plot_str(dataTaxiSample)
+# plot_missing(dataTaxiSample)
+# plot_histogram(dataTaxiSample)
+# plot_density(dataTaxiSample)
+plot_correlation(dataTaxiSample, type = 'continuous','Review.Date')
+#plot_bar(dataTaxiSample)
+# ### check the report created; interesting issues 
+# 
+# create_report(dataTaxiSample)
+
+```
+
+
+#####  Data distributions: Skewness & Kurtosis/peakyness
+```{r echo=F}
+selectInput("n_variable", label = "Variable:",
+              choices = c("passenger_count","trip_distance","tip_amount","tolls_amount" ), selected = "tip_amount")
+```
+
+
+```{r echo=F}
+library(classInt)
+library(shiny)
+
+
+renderPlot({
+  breaks =classIntervals(dataTaxiSample[,input$n_variable])
+  br = breaks$brk
+  #ggplot(dataTaxiSample, aes(inputDist)) + geom_histogram()
+  qplot(dataTaxiSample[,input$n_variable]) + geom_histogram(binwidth = 2) + stat_bin( )
+
+})
+
+# # 
+# # renderPlot({
+# # 
+# #     x    <- (dataTaxiSample[,input$n_variable])
+# #     breaks =classIntervals(x)
+# #     br = breaks$brk
+# #     # print(breaks$brks)
+# #     hist(x, 
+# #          breaks = br,  
+# #          col = "#75AADB", border = "white",
+# #          xlab = x,
+# #          xlim = c(0,1000),
+# #          main = paste0("Histogram of ", input$n_variable)) 
+# # 
+# #     })
+# 
+# # Define server logic required to draw a histogram
+# shinyServer(function(input, output) {
+# 
+#   # Expression that generates a histogram. The expression is
+#   # wrapped in a call to renderPlot to indicate that:
+#   #
+#   #  1) It is "reactive" and therefore should re-execute automatically
+#   #     when inputs change
+#   #  2) Its output type is a plot
+# 
+#     output$distPlot <- renderPlot({
+#     x    <- dataTaxiSample[,input$n_variable]  # Old Faithful Geyser data
+#     bins <- seq(min(x), max(x), length.out = input$bins + 1)
+# 
+#     # draw the histogram with the specified number of bins
+#     hist(x, breaks = bins, col = 'darkgray', border = 'white')
+#   })
+# })
+# 
+# plotOutput("distPlot")
+```
+
+
+improve bins/breaks; add more variables 
+
+##### Boxplot per payment_type
+
+```{r echo=T, warning=FALSE}
+ggplot(data = dataTaxiSample, 
+       aes(x=payment_type,y=tip_amount, color=as.factor(payment_type))) +
+  geom_boxplot()+
+  scale_color_brewer(palette="Dark2",
+                     labels=c("Credit Card","Cash","No charge","Dispute")) +
+  geom_jitter(shape=16, position=position_jitter(0.2))+ ylim(0,75) + 
+  labs(title = 'tip amount per payment type', 
+       y='tip_amount',x='payment_type', col="Payment type") +
+  scale_x_discrete(labels=c("1"= "Credit Card", "2"= "Cash","3"="No charge","4"="Dispute"))
+
+```
+
+<br>
+
+Thus, we kept only the credit card records to infer the tip amount 
+
+<br>
+
+**Preliminary Visualisation**<br><br>  
+
+<br> Aggregate statistics from Taxi pick up location  
+
+```{r echo=T, warning=F, message=F}
+
+# library(rgdal)
+# library(tidyverse)
+# library(sf)
+# 
+# groupedPulLocation <- dataTaxiSample %>%
+#                         group_by(PULocationID) %>%
+#                           summarise(mean_trip_distance = mean(trip_distance),
+#                                     mean_tip_amount=mean(tip_amount),
+#                                     mean_total_amoun=mean(total_amount),
+#                                     mean_tip_percent=mean(tip_per),
+#                                     mean_trip_time_min=mean(trip_time_min))
+# 
+# 
+# 
+# TaxiZones <- readOGR("dataset/taxi_zones/taxi_zones.shp", layer="taxi_zones")
+# 
+# TaxiZonesSF <- st_as_sf(TaxiZones)
+# TaxiZonesSF <- merge(TaxiZonesSF, groupedPulLocation , by.x= "LocationID",
+#                      by.y="PULocationID")
+# 
+# TaxiZones@data <- merge(TaxiZones@data, groupedPulLocation , by.x= "LocationID",
+#                      by.y="PULocationID")
+# library(tmap)
+# tmap_mode("view")
+# qtm(TaxiZonesSF, fill ="mean_tip_amount" )
+# output$plot_map <-   renderPlot({  })
+# 
+# plotOutput("plot_map")
+
+# renderPlot({
+#   tmap_mode("view")
+#   qtm(TaxiZonesSF, fill =TaxiZonesSF$mean_trip_distance)
+    # qtm(TaxiZonesSF, fill ="mean_tip_amount" )
+
+#   # tm_shape(TaxiZones) +
+#   # tm_polygons(col = "mean_trip_distance", palette = "RdBu")
+# 
+#   })
+img(src='images/mean_tip_by_PulLoc.png')
+
+
+```
+
+
+<br> Aggregate statistics from Taxi drop off location 
+
+
+```{r echo=T, warning=F, message=F}
+# groupedDOLocation <- dataTaxiSample %>%
+#                         group_by(DOLocationID) %>%
+#                           summarise(mean_trip_distance = mean(trip_distance),
+#                                     mean_tip_amount=mean(tip_amount),
+#                                     mean_total_amoun=mean(total_amount),
+#                                     mean_tip_percent=mean(tip_per),
+#                                     mean_trip_time_min=mean(trip_time_min))
+# # 
+# # 
+# # 
+# # # TaxiZones <- readOGR("dataset/taxi_zones/taxi_zones.shp", layer="taxi_zones")
+# # # library(rgdal)
+# # # library(tidyverse)
+# # # library(sf)
+# # # TaxiZonesSF <- st_as_sf(TaxiZones)
+# TaxiZonesSF <- merge(TaxiZonesSF, groupedDOLocation , by.x= "LocationID",by.y="DOLocationID")
+# 
+# TaxiZones@data <- merge(TaxiZones@data, groupedDOLocation , by.x= "LocationID",by.y="DOLocationID",  )
+# # # library(tmap)
+# # tmap_mode("view")
+# 
+# # renderPlot({
+#    tm_shape(TaxiZones) + tm_polygons(col = "mean_trip_distance", palette = "RdBu")
+# })
+# tm_shape(TaxiZones) + tm_polygons(col = "mean_trip_distance", palette = "RdBu")
+
+
+```
+
+
+##### sankey routes 
+
+<br> 
+
+
+#### PCA; ANOVA
+
+<br>
+
+
+##### *Principal Component Analysis (PCA)*  
+* unsupervised learning   
+* el espacio dimensional se reduce perdiendo la menor cantidad de información (varianza) posible 
+* transformación lineal (rotaciíon de los ejes) a un nuevo sistema de coordenadas ortogonales entre si y combinación lineal de las varaibles originales de manera que estos ejes coincidan con la dirección de máxima varianza de los datos y en el que la mayor parte de la varianza la explica la primera coordenada. 
+
+```{r echo=T}
+dataTaxiCardSample <- read.csv('dataset/dataTaxiCardSample.csv', sep ="," )
+dataTaxiCardSample[,1] <-  NULL
+
+dataTaxiCardSample$VendorID <- as.factor(dataTaxiCardSample$VendorID)
+# dataTaxiCardSample$tpep_pickup_datetime <- ymd_hm(dataTaxiCardSample$tpep_pickup_datetime)
+# dataTaxiCardSample$tpep_dropoff_datetime <- ymd_hm(dataTaxiCardSample$tpep_dropoff_datetime)
+# dataTaxiCardSample$tip_per <- dataTaxiCardSample$tip_amount/dataTaxiCardSample$total_amount
+# dataTaxiCardSample$trip_time_min <- as.numeric(difftime(ymd_hms(dataTaxiCardSample$tpep_dropoff_datetime), 
+#                                          ymd_hms(dataTaxiCardSample$tpep_pickup_datetime), units = 'mins'))
+# 
+dataTaxiCardSample$passenger_count <- as.integer(dataTaxiCardSample$passenger_count)
+## también puede ser factor
+dataTaxiCardSample$RatecodeID <- as.factor(dataTaxiCardSample$RatecodeID)
+dataTaxiCardSample$store_and_fwd_flag <- as.factor(dataTaxiCardSample$store_and_fwd_flag)
+## correspoden a shapes MapZones
+dataTaxiCardSample$PULocationID <- as.factor(dataTaxiCardSample$PULocationID)
+dataTaxiCardSample$DOLocationID <- as.factor(dataTaxiCardSample$DOLocationID)
+
+dataTaxiCardSample$payment_type <- as.factor(dataTaxiCardSample$payment_type)
+dataTaxiCardSample$wday <- as.factor(dataTaxiCardSample$wday)
+
+```
+```{r echo=T, warning=F}
+# numerical variables, check correlation plot 
+#> write.csv(dataTaxiSampleCardSample, "dataTaxiSampleCardSample.csv")
+library(factoextra)
+
+pca <- prcomp(dataTaxiCardSample[,c(5,11:17,19,21)])
+
+fviz_eig(pca)
+
+# dim(pca$rotation)
+# La varianza explicada por cada componente principal (correspondiente a los eigenvalores) la obtenemos elevando al cuadrado la desviación estándar:
+prop_varian <- pca$sdev^2 / sum(pca$sdev^2)
+prop_varian
+#importance of the components 
+# summary(pca)
+
+
+```
+* La primera componente principal explica el 92% de la variabilidad de los datos  
+
+*  pesos (loadings) de los componentes principales 
+```{r echo=T}
+get_eig(X = pca)
+# pca$rotation
+kable(pca$rotation, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed")) %>%
+  row_spec(3, bold = T, color = "white", background = "#D7261E") %>%
+  column_spec(1, bold = T, color = "black", background = "#add8e6") %>%
+  scroll_box(width = "900px")
+```
+<br>  
+
+PC1 = 0.1615 * (trip_distance) + 0.5113 * (fare amount)  -0.0011 * (extra) -0.0004 * (mta_tax) + 0.1018 * (tip_amount ) + 0.0465 * (tolls_amount) + 1.155033e-32 * (improvement_surcharge) + 0.6583 * (total_amount) + -7.098156e-05 * (tip_per) + 0.5163 * (trip_time_min)
+
+PC2 = ...   
+... 
+
+<br>
+
+  
+##### Correlation Matrix  
++ variables originales contra Componentes Principales 
++ todas las variables 
+
+```{r echo=T, warning=F}
+library("corrplot")
+var <- get_pca_var(pca)
+corrplot(var$cos2, is.corr = FALSE)
+
+# plot_correlation(dataTaxiCardSample[,-c(4,16,20)], type = 'continuous','Review.Date')
+
+# plot_histogram(dataTaxiCardSample[,-c(4,16,20)])
+
+plot_correlation(dataTaxiCardSample, type = 'continuous' ,'Review.Date')
+
+plot_histogram(dataTaxiCardSample)
+
+#var$contrib
+
+```
+
+##### *ANOVA (Analysis of variances)*  
+In its simplest form, ANOVA provides a statistical test of whether the means of several groups are equal, and therefore generalises the t-test to more than two groups. ANOVA is useful for comparing (testing) three or more means (groups or variables) for statistical significance.
+
+In ANOVA, *any confidence intervals that do not contain zero provide evidence of a significative difference among the groups that are being compared.* <br>
+
+The Tukey test is a single-step multiple comparison procedure and statistical test. It is a post-hoc analysis, which means that it is used in conjunction with ANOVA. It is used to find means of a factor that are significantly different from each other, comparing all possible pairs of means with a t-test method.
+
+*Explicar ticks eje horizontal*  
+
+
+```{r echo=T}
+selectInput("n_varANO", label = "Factorial Variable:",
+              choices = c("RatecodeID","wday","tip","store_and_fwd_flag" ), selected = "wday")
+```
+
+
+```{r echo=T}
+#------------------------------------------------------------------------------------------------------------------
+#--------------------------                                            -------------------------------------
+#------------------------------------------------------------------------------------------------------------------
+
+# print(input$n_varANO)
+# dataInput <- reactive({input$n_varANO})
+renderPlot({
+    
+    anova_dd <- aov(tip_amount ~ wday, data = dataTaxiCardSample )
+    Tukey <- TukeyHSD(anova_dd)
+    #
+    plot (Tukey)
+ 
+ 
+})   
+renderPlot({
+ 
+    anova_dd <- aov(tip_amount ~ RatecodeID, data = dataTaxiCardSample )
+    Tukey <- TukeyHSD(anova_dd)
+    #
+    plot (Tukey)
+ 
+})   
+#categorical variables and posssible variables after recode 
+#"VendorID"  
+#"passenger_count"  --> change form integer to categorical 
+# "tpep_pickup_datetime"  "tpep_dropoff_datetime" --> change to "evening"... 
+#"RatecodeID"
+#"store_and_fwd_flag"  
+#"PULocationID"          "DOLocationID"   --> location data ; cluster together ; spatail regression
+#"payment_type" 
+# "extra"  --> reformat
+# "mta_tax" --> reformat
+# "improvement_surcharge" --> reformat
+# "tip" 
+# "wday"   
+# "trip_time_min"  --> recode ( long , short)
+# 
+
+
+#from the numeric variables we will kept  total_amount; trip_time_min fare_amount, trip_distance, tip_amount.
+### read data Taxi Card Sample 
+```
+
+<br><br>
+**Discussion:**  
+From the numeric variables we will kept  total_amount; trip_time_min fare_amount, trip_distance, tip_amount; 
+From the above graphs it is concluded that the differences in the  RateCodeID factorial variable is significant related to the tip amount. However, the day of the week is only significant when comparing some precise days (Sunday appears to be the day with significantly less tip amount when compared to Monday,.... )  
+
++ Recoding other variables as the timestamp in a factorial variable (Evenings, Mornings,...) other significant differences might be arisen.  
+
+
+
+#### MODELS
+The following models have been tried:  
+
++ linear regression  
++ logistic regression  
++ random forest  
++ note on clustering     
+
+***
+```{r echo=T, warning=F, message=F}
+# qplot(tip_amount, data = dataTaxiCardSample[dataTaxiCardSample$tip==TRUE,], gemo = "histogram" , xlim = c(0,20))
+
+qplot(tip_amount, data = dataTaxiCardSample, gemo = "histogram" , xlim = c(0,20)) + stat_bin(bins = 30)
+
+```
+
+
+histogram of tip amount; Positive Skew. Not normally distributed; transformation of the variable (log)?
+
++ poisson distribution ? 
+
+
+```{r echo=T, warning=F, message=F}
+qplot(trip_distance, tip_amount/fare_amount , data = dataTaxiCardSample[dataTaxiCardSample$tip==TRUE,], geom = "point", ylim = c(0,0.5)) + stat_smooth(method="lm", se=FALSE, size=1)
+
+```
+
+
+testing whether if there is a relationship between tip_percentage (tip amount/fare_amount) and trip distance   
++ Chisq squared test 
+```{r echo=T, warning=F, message=F}
+# chisq<-chisq.test(dataTaxiCardSample$trip_distance[dataTaxiCardSample$tip==TRUE],
+#                   dataTaxiCardSample$tip_amount[dataTaxiCardSample$tip==TRUE]/dataTaxiCardSample$fare_amount[dataTaxiCardSample$tip==TRUE])
+#observed counts
+# chisq$observed
+# chisq$expected
+# #chi squared statistic
+# chisq$statistic
+# #p-value
+# chisq$p.value
+
+newvar<-0
+recode<-function(variable,high,medium,low){
+  newvar[variable<=high]<-"High_long"
+  newvar[variable<=medium]<-"Medium"
+  newvar[variable<=low]<-"Low"
+  return(newvar)
+}
+summary(dataTaxiCardSample$trip_distance[dataTaxiCardSample$tip==TRUE])
+
+summary(dataTaxiCardSample$tip_per)
+
+dataTaxiCardSample$trip_distance_recode <- recode(dataTaxiCardSample$trip_distance,39.800 , 3.140,  1.010)
+dataTaxiCardSample$tip_per_recode <- recode(dataTaxiCardSample$tip_per,53.3320 , 0.2457,  0.1852)
+
+
+chisq<-chisq.test(dataTaxiCardSample$trip_distance_recode, dataTaxiCardSample$tip_per_recode) 
+                  
+chisq$observed
+chisq$expected
+#chi squared statistic
+chisq$statistic
+#p-value
+chisq$p.value
+                  
+```
+
+
+
+
+##### Linear regression with numerical variables 
+```{r echo=T, warning=F, message=F}
+##thus never will be recomended zero tip 
+linear_model <- lm(data=dataTaxiCardSample[dataTaxiCardSample$tip==TRUE,],
+                   tip_amount ~ total_amount + trip_time_min + fare_amount + trip_distance )
+
+# linear_model <- lm(data=dataTaxiCardSample[dataTaxiCardSample$tip_amount >0  & dataTaxiCardSample$tip_amount < 100  ,],
+#                    tip_amount ~ total_amount + trip_time_min + fare_amount + trip_distance )
+
+#                    
+# linear_model <- lm(data=dataTaxiCardSample,
+#                    log10(tip_amount+ 0.001) ~ log10(total_amount+0.001) + log10(trip_time_min+0.001) + log10(fare_amount+0.001) + log10(trip_distance+0.001) )
+
+ ##total_amount; trip_time_min fare_amount, trip_distance, tip_amount
+summary(linear_model)
+# # sum <- tidy(linear_model)
+# sum
+par(mfrow=c(2, 2))
+plot(linear_model)
+```
+
+
+##### *Interpretation of the results of the model summary* 
+
+
++ The p-values for the intercept and the coefficient are highly statistically significant (<0.001) so we can rely on the relationship that is being observed.  
++ The adjusted R-squared statistic is 0.897, which tells us that 89,7% of the variation in the tip amount is explained by the variation in total_amount, trip_time_min,fare_amount, trip_distance  
++ Interrogating the last graph in plot(linear_model) which is a scatter plot of fitted values (the model estimates achieved by plugging the values and coefficients back into the regression equation) against standardised residuals, we can see no apparent patterns in the cloud of points, which suggests the model has not violated any important assumptions. (??) even if all the dependent and independent variables ( and mostly the residuals)should be normally distirbutted for a linear regression. 
++ Scale Location residuals plot --> as residuals are clustered and not centered around zero --> the model is not ok 
++ Outliers; too many --> back to tab data cleaning 
+
+
+<br>
+
+
+##### Linear regression with numerical variables adding categorical/factorial variables 
+```{r echo=F, warning=F, message=F,}
+
+linear_model2 <- lm(data=dataTaxiCardSample, 
+                   tip_amount ~ total_amount + trip_time_min + fare_amount + trip_distance + VendorID + PULocationID + DOLocationID   )
+ ##total_amount; trip_time_min fare_amount, trip_distance, tip_amount
+summary(linear_model2)
+
+# contrasts(dataTaxiCardSample$PULocationID)
+
+
+# log_model2 <- glm(data=dataTaxiSampleCardSample[dataTaxiSampleCardSample$tip==TRUE,], 
+#                     tip_amount ~ total_amount + trip_time_min + fare_amount + trip_distance + VendorID + PULocationID + DOLocationID   )
+# ##total_amount; trip_time_min fare_amount, trip_distance, tip_amount
+# summary(log_model2)
+par(mfrow=c(2, 2))
+
+plot(linear_model2)
+
+```
+
+
+So, what do the model outputs tell us?  
+
++ The first thing to note is that the new variable (Vendor_ID ) is not significant (p-value is <0.001 or ***)  
++ The fit of the model represented by the R-squared score has improved to around 91% of the variation in the tip amount now explained by the independent variables.  
++ t-values are standardised coefficient values and give a sense of the importance of each independent variable - especially when measured on different scales (the coefficients relate to the unit of measurement) -
++ Results show that pick up and drop off locations are significant to explain  Suggestion to do a Spatial 
+
+
+
+
+##### Random Forest  
++ collection of decision trees
++ better than regular decision trees and bagging
++ robust against outliers
++ week compared to boosting algorithms
++ 
+
+
+```{r echo=F, warning=F, message=F, out.width=c('50%', '50%'), fig.show='hold', dpi=120}
+# library(skimr)
+# skim(dataTaxiSampleCardSample)
+# 
+library(ranger)
+
+
+set.seed(123)
+random_forest <- tree::tree(
+                    formula = tip_amount ~ total_amount + trip_time_min + fare_amount + trip_distance + VendorID,
+                    data    = dataTaxiCardSample,
+                    split   = "deviance",
+                    mincut  = 20,
+                    minsize = 50
+                  )
+#factor predictors must have at most 32 levels
+#thus origin and destination variables arenot included 
+#
+summary(random_forest)
+
+# Estructura del árbol creado
+# ==============================================================================
+par(mar = c(1,1,1,1))
+plot(x = random_forest, type = "proportional")
+text(x = random_forest, splits = TRUE, pretty = 0, cex = 0.8, col = "firebrick")
+
+# library("rpart")
+# plotcp(random_forest)
+```
+
+
+##### *Interpretation of the results* 
++ 
+
+
+##### note on clustering  
++ A cluster analysis might be used and the previous models applied separately to the different clusters might be improved. 
+
+```{r echo=F, warning=F, message=F, out.width=c('50%', '50%'), fig.show='hold', dpi=120}
+
+
+
+```
+
+
+```{r echo=F, warning=F, message=F, out.width=c('50%', '50%'), fig.show='hold', dpi=120}
+
+
+
+
+```
+
+#### Models Validation 
+
+##### Models Predictions
+##### 
+```{r echo=F, warning=F, message=F, out.width=c('50%', '50%'), fig.show='hold', dpi=120}
+
+
+```
+
+##### Model Performance
+
+##### Cross Validation
+
+
+##### Over fitting 
+
+
+<!-- [^1]: [Dennett, A.,2017. Rpubs](https://rpubs.com/adam_dennett) -->
+<!-- [^2]: [Lovelace, R.,2016. Rpubs](http://rpubs.com/RobinLovelace) -->
+<!-- [^3]: [The R Graph Gallery](https://www.r-graph-gallery.com/84-tukey-test/) -->
+
+
+
+
+```{r echo=FALSE, out.width="100%", fig.show='hold', fig.align='center'}
+
+# out.height="20%"
+library(knitr)
+#knitr::include_graphics("UE.png")
+
+```
+
+
